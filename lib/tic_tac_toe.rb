@@ -28,43 +28,21 @@ module Screen
   end
 end
 
-
 class TTTBoard
-  attr_accessor :positions
+  attr_reader :positions
   # position layout
   # 1 | 2 | 3
   # 4 | 5 | 6
   # 7 | 8 | 9
 
+  def mark_position(move, marker)
+    @positions[move] = marker
+    @display.mark_move(move, marker)
+  end
+
   def initialize(display)
     @display = display
     @positions = (1..9).zip([''] * 9).to_h
-    @cursor_position = 1
-    @display.refresh_cursor(@cursor_position)
-  end
-
-  def cursor_up
-    raise MoveOutOfBoundsError if @cursor_position < 4
-    @cursor_position = @cursor_position - 3
-    @display.refresh_cursor(@cursor_position)
-  end
-
-  def cursor_down
-    raise MoveOutOfBoundsError if @cursor_position > 6
-    @cursor_position = @cursor_position + 3
-    @display.refresh_cursor(@cursor_position)
-  end
-
-  def cursor_right
-    raise MoveOutOfBoundsError if [3, 6, 9].include? @cursor_position
-    @cursor_position = @cursor_position + 1
-    @display.refresh_cursor(@cursor_position)
-  end
-
-  def cursor_left
-    raise MoveOutOfBoundsError if [1, 4, 7].include? @cursor_position
-    @cursor_position = @cursor_position - 1
-    @display.refresh_cursor(@cursor_position)
   end
 end
 
@@ -83,25 +61,86 @@ class TTTDisplay
   LEFT_ARROW = "\e[D"
   HIGHLIGHT = "\e[1m"
   ALL_PROPERTIES_OFF = "\e[0m"
+  CTRL_C = "\u0003"
+
+  # Other special characters
+  ENTER = "\r"
+  LINE_FEED = "\n"
 
   def initialize
     Screen.clear_screen
     @center = calculate_center
     @marker_coordinates = calculate_marker_coordinates
     @cursor_coordinates = calculate_cursor_coordinates
-    @cursor_position = nil
+    @cursor_position = 5
   end
 
-  def refresh_cursor(new_cursor_position)
+  def mark_move(move, marker)
+    move_to_point(*@marker_coordinates[move])
+    print marker
+  end
+
+  def retrieve_human_move
+    retrieve_move_selection
+    @cursor_position
+  end
+
+  def retrieve_move_selection
+    loop do
+      input = STDIN.getch
+      break if input == CTRL_C
+
+      input << STDIN.getch while STDIN.ready?
+      begin
+        case input
+        when UP_ARROW then cursor_up
+        when DOWN_ARROW then cursor_down
+        when RIGHT_ARROW then cursor_right
+        when LEFT_ARROW then cursor_left
+        when ENTER, LINE_FEED then return
+        end
+      rescue MoveOutOfBoundsError
+        print "!"
+      end
+    end
+  end
+
+  def invalid_move
+    print "Invalid move"
+  end
+
+  def move_cursor(new_cursor_position)
     erase_current_cursor
     @cursor_position = new_cursor_position
     move_to_point(*@cursor_coordinates[@cursor_position])
     insert_cursor_marker
   end
 
-  def erase_current_cursor
-    return if @cursor_position.nil?
+  def cursor_up
+    raise MoveOutOfBoundsError if @cursor_position < 4
+    new_cursor_position = @cursor_position - 3
+    move_cursor(new_cursor_position)
+  end
 
+  def cursor_down
+    raise MoveOutOfBoundsError if @cursor_position > 6
+    new_cursor_position = @cursor_position + 3
+    move_cursor(new_cursor_position)
+  end
+
+  def cursor_right
+    raise MoveOutOfBoundsError if [3, 6, 9].include? @cursor_position
+    new_cursor_position = @cursor_position + 1
+    move_cursor(new_cursor_position)
+  end
+
+  def cursor_left
+    raise MoveOutOfBoundsError if [1, 4, 7].include? @cursor_position
+    new_cursor_position = @cursor_position - 1
+    move_cursor(new_cursor_position)
+  end
+
+  def erase_current_cursor
     move_to_point(*@cursor_coordinates[@cursor_position])
     print ' '
   end
@@ -140,8 +179,8 @@ class TTTDisplay
     y_start = VERTICAL1[:start][0]
     y_stop = VERTICAL1[:stop][0]
 
-    x_dist = (x_stop - x_start) / 3
-    y_dist = (y_stop - y_start) / 3 + 1
+    x_dist = ((x_stop - x_start + 1) / 3.0).round
+    y_dist = ((y_stop - y_start + 1) / 3.0).round
 
     [y_dist, x_dist]
   end
@@ -152,25 +191,6 @@ class TTTDisplay
 
     line_coord_pairs.each do |line_coord_pair|
       Line.new(line_coord_pair).draw
-    end
-  end
-
-  def retrieve_cursor_move
-    input = STDIN.getch
-    return :break if input == "\u0003" # Ctrl-c
-
-    input << STDIN.getch while STDIN.ready?
-    case input
-    when UP_ARROW
-      :up
-    when DOWN_ARROW
-      :down
-    when RIGHT_ARROW
-      :right
-    when LEFT_ARROW
-      :left
-    else # TODO: account for return here
-      :something_else
     end
   end
 
@@ -264,31 +284,29 @@ class Player
 end
 
 class Human < Player
-  def initialize
+  def initialize(board, display)
     @marker = HUMAN_MARKER
+    @board = board
+    @display = display
+    @move = nil
   end
 
-  def cursor_move(board, display)
+  def retrieve_move
     loop do
-      input = display.retrieve_cursor_move
-      begin
-        case input
-        when :break
-          break
-        when :up
-          board.cursor_up
-        when :down
-          board.cursor_down
-        when :right
-          board.cursor_right
-        when :left
-          board.cursor_left
-        end
-        #check for enter to select move
-      rescue MoveOutOfBoundsError
-        puts "!"
-      end
+      @move = @display.retrieve_human_move
+      break if valid_move?
+
+      @display.invalid_move
     end
+    @board.mark_position(@move, @marker)
+  end
+
+  def valid_move?
+    board_empty_at_position?
+  end
+
+  def board_empty_at_position?
+    @board.positions[@move] = ''
   end
 end
 
@@ -296,11 +314,11 @@ class TTTGame
   def initialize
     @display = TTTDisplay.new
     @board = TTTBoard.new(@display)
-    @human = Human.new
+    @human = Human.new(@board, @display)
   end
 
   def quit
-    Screen.clear_screen
+    # Screen.clear_screen
     STDIN.cooked!
     STDIN.echo = true
     Screen.show_cursor
@@ -309,7 +327,7 @@ class TTTGame
 
   def play
     @display.draw_lines
-    @human.cursor_move(@board, @display)
+    @human.retrieve_move
   end
 end
 

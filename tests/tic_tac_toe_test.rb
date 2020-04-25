@@ -32,15 +32,6 @@ class DisplayTest < Minitest::Test
   def teardown
   end
 
-  def test_human_move
-    display = TTTDisplay.new
-    human = Human.new
-    human.move(display)
-    expected = 'O'
-    actual = display.positions[1]
-    assert_equal(expected, actual)
-  end
-
   def test_draw_two_vertical_lines
     display = TTTDisplay.new
     assert_output(/│.+│/) { display.draw_lines }
@@ -49,5 +40,9 @@ class DisplayTest < Minitest::Test
   def test_intersections
     display = TTTDisplay.new
     assert_output(/┼/) { display.draw_lines }
+  end
+
+  def test_retrieve_human_move
+
   end
 end
