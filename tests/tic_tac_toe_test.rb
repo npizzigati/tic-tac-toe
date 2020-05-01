@@ -1,6 +1,7 @@
 require 'minitest/autorun'
 require 'stringio'
 require 'pry'
+
 require_relative '../lib/tic_tac_toe.rb'
 
 class LineTest < Minitest::Test
@@ -8,18 +9,14 @@ class LineTest < Minitest::Test
     Line.class_variable_set :@@coords_drawn, []
   end
 
-  def teardown
-    # STDIN.cooked!
-  end
-
   def test_draw_horizontal_line
-    coord_pair = TTTDisplay::HORIZONTAL1
+    coord_pair = Display::HORIZONTAL1
     horizontal_line = Line.new(coord_pair)
     assert_output(/─/) { horizontal_line.draw}
   end
 
   def test_draw_vertical_line
-    coord_pair = TTTDisplay::VERTICAL1
+    coord_pair = Display::VERTICAL1
     vertical_line = Line.new(coord_pair)
     assert_output(/│/) { vertical_line.draw }
   end
@@ -30,24 +27,21 @@ class DisplayTest < Minitest::Test
     Line.class_variable_set :@@coords_drawn, []
   end
 
-  def teardown
-  end
-
   def test_draw_two_vertical_lines
-    display = TTTDisplay.new
-    assert_output(/│.+│/) { display.draw_lines }
+    display = Display.new(false)
+    assert_output(/│.+│/) { display.draw_initial_board }
   end
 
   def test_intersections
-    display = TTTDisplay.new
-    assert_output(/┼/) { display.draw_lines }
+    display = Display.new(false)
+    assert_output(/┼/) { display.draw_initial_board }
   end
 end
 
 class BoardTest < Minitest::Test
   def setup
-    @display = TTTDisplay.new
-    @board = TTTBoard.new(@display)
+    @display = Display.new(false)
+    @board = Board.new(@display)
     @computer = Computer.new(@board)
   end
 
@@ -60,45 +54,37 @@ end
 
 class HumanTest < Minitest::Test
   def setup
-    @display = TTTDisplay.new
-    @board = TTTBoard.new(@display)
+    @display = Display.new(false)
+    @board = Board.new(@display)
     @human = Human.new(@board, @display)
-  end
-
-  def test_valid_move?
-    @board.positions = [:X, nil, nil, nil, nil, nil, nil, nil, nil]
-    @human.instance_variable_set :@move, 0
-    expected = false
-    actual = @human.valid_move?
-    assert_equal expected, actual
   end
 end
 
 class ComputerTest < Minitest::Test
-  COMPUTER_MARKER = :X
+  COMPUTER_MARKER = :computer
   def setup
-    @display = TTTDisplay.new
-    @board = TTTBoard.new(@display)
-    @board.positions = [nil, nil, :X, :X, :O, :O, nil, :O, :X]
+    @display = Display.new(false)
+    @board = Board.new(@display)
+    @board.squares = [nil, nil, :computer, :computer, :human, :human, nil, :human, :computer]
     @computer = Computer.new(@board)
   end
 
   def test_computer_selects_best_move
     @computer.move
-    expected = [nil, :X, :X, :X, :O, :O, nil, :O, :X]
-    actual = @board.positions
+    expected = [nil, :computer, :computer, :computer, :human, :human, nil, :human, :computer]
+    actual = @board.squares
     assert_equal expected, actual
   end
 
   def test_computer_makes_move
     @computer.move
-    assert_includes(@board.positions, COMPUTER_MARKER)
+    assert_includes(@board.squares, COMPUTER_MARKER)
   end
 end
 
 class MinimaxShortTreeTest < Minitest::Test
   def setup
-    @board = [nil, nil, :X, :X, :O, :O, nil, :O, :X]
+    @board = [nil, nil, :computer, :computer, :human, :human, nil, :human, :computer]
     @tree = Node.new(@board, nil)
   end
 
