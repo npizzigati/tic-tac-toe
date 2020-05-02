@@ -58,7 +58,7 @@ class Display
     STDOUT.write "\u001b[0;0H" # set cursor to home position
   end
   
-  def mark_square(number, marker)
+  def mark(number, marker)
     move_to_point(*@square_coordinates[number])
     print_marker(marker)
   end

@@ -1,8 +1,6 @@
 class Minimax
-  # attr_reader :tree
-
-  def create_tree(squares)
-    node = Node.new(squares, nil)
+  def create_tree(board)
+    node = Node.new(board, nil)
     score_node(node)
     node
   end
@@ -30,10 +28,10 @@ class Node
   # attr_accessor :squares, :marker, :score, :children
   attr_accessor :score
 
-  attr_reader :winner, :children, :squares
+  attr_reader :winner, :children, :board
 
-  def initialize(squares, marker)
-    @squares = squares
+  def initialize(board, marker)
+    @board = board
     @marker = marker
     @winner = determine_winner
     @children = []
@@ -45,17 +43,21 @@ class Node
     end
   end
 
+  def [](index)
+    @board[index]
+  end
+
   def add_children
     0.upto(8) do |idx|
       if move_available?(idx)
-        @children << Node.new(child_squares(idx),
+        @children << Node.new(child_board(idx),
                              other_marker)
       end
     end
   end
 
   def move_available?(idx)
-    @squares[idx].nil?
+    @board[idx].nil?
   end
 
   def assign_score
@@ -73,10 +75,10 @@ class Node
     @winner || tie?
   end
 
-  def child_squares(idx)
-    @squares[0...idx] +
+  def child_board(idx)
+    @board[0...idx] +
       [other_marker] +
-      @squares[(idx + 1)..-1]
+      @board[(idx + 1)..-1]
   end
 
   def determine_winner
@@ -88,11 +90,11 @@ class Node
   end
 
   def replace_indices_with_markers(line)
-    line.map { |idx| @squares[idx] }
+    line.map { |index| @board[index] }
   end
 
   def tie?
-    @squares.index(nil).nil? # All moves taken
+    @board.find_index(nil).nil? # All moves taken
   end
 
   def other_marker

@@ -4,7 +4,9 @@ require_relative 'minimax.rb'
 require_relative 'display.rb'
 
 class Board
-  attr_accessor :squares
+  include Enumerable
+
+  # attr_accessor :squares
 
   def initialize(display)
     @display = display
@@ -15,18 +17,30 @@ class Board
     @squares = Array.new(9) { nil }
   end
 
-  def available_moves
-    available = []
-    @squares.each_with_index do |square, idx|
-      available << idx if square.nil?
-    end
-    available
+  def each(&block) 
+    @squares.each(&block)
   end
 
-  def mark_square(number, marker)
-    @squares[number] = marker
-    @display.mark_square(number, marker)
+  def []=(index, marker)
+    @squares[index] = marker
+    @display.mark(index, marker)
   end
+
+  def [](index)
+    @squares[index]
+  end
+
+  def full?
+    @squares.index(nil).nil?
+  end
+
+  # def available_moves
+  #   available = []
+  #   @squares.each_with_index do |square, idx|
+  #     available << idx if square.nil?
+  #   end
+  #   available
+  # end
 end
 
 class Computer
@@ -36,18 +50,19 @@ class Computer
 
   def move
     pause_briefly
-    @board.mark_square(retrieve_minimax_move, :computer)
+    index = retrieve_minimax_move
+    @board[index] = :computer
   end
 
   def retrieve_minimax_move
-    tree = Minimax.new.create_tree(@board.squares)
-    best_child_board = tree.children.max { |a, b| a.score <=> b.score }.squares
-    determine_delta(best_child_board)
+    tree = Minimax.new.create_tree(@board)
+    best_child_board = tree.children.max { |a, b| a.score <=> b.score }
+    delta(best_child_board)
   end
 
-  def determine_delta(best_child_board)
-    @board.squares.each_with_index do |square, square_number|
-      return square_number if best_child_board[square_number] != square
+  def delta(best_child_board)
+    @board.each_with_index do |square, index|
+      return index if best_child_board[index] != square
     end
   end
 
@@ -67,12 +82,12 @@ class Human
     until valid?(move)
       move = @display.retrieve_human_move
     end
-    @board.mark_square(move, :human)
+    @board[move] = :human
   end
 end
 
 def valid?(move)
-  move != nil && @board.squares[move].nil?
+  move != nil && @board[move].nil?
 end
 
 class TTTGame
