@@ -7,7 +7,6 @@ HUMAN_MARKER = 'O'
 
 BOARD_OFFSET = [2, 2] # [y, x] offset from upper left corner
 
-
 class MoveOutOfBoundsError < StandardError; end
 class KeyboardInterruptError < StandardError; end
 
@@ -321,6 +320,27 @@ class Display
     show_cursor
     clear_screen
   end
+end
+
+class Input
+  class MoveOutOfBoundsError < StandardError; end
+  class KeyboardInterruptError < StandardError; end
+  #if I keep this, erase error classes at top of file
+
+  def initialize
+    @value = nil
+  end
+
+  def to_s
+    @value
+  end
+
+  def keypress
+    @input = STDIN.getch
+    exit(1) if @input == CTRL_C
+    @input << STDIN.getch while STDIN.ready?
+  end
+
 end
 
 class Line

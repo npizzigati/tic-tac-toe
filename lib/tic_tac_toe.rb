@@ -3,7 +3,6 @@ require 'pry'
 require_relative 'minimax.rb'
 require_relative 'display.rb'
 
- 
 class Board
   WINNING_LINES = [0, 1, 2], [3, 4, 5], [6, 7, 8], # horizontal
                    [0, 3, 6], [1, 4, 7], [2, 5, 8], # vertical
@@ -23,7 +22,7 @@ class Board
     @squares = Array.new(9) { :empty }
   end
 
-  def each(&block) 
+  def each(&block)
     @squares.each(&block)
   end
 
@@ -71,7 +70,7 @@ class Computer
   def retrieve_minimax_move
     tree = Minimax.new.create_tree(@board)
     best_child_board = tree.children.max do |a, b|
-      a.score <=> b.score 
+      a.score <=> b.score
     end
 
     delta(best_child_board)
@@ -96,7 +95,7 @@ class Human
 
   def move
     square = nil
-    loop do 
+    loop do
       square = @display.retrieve_human_move
       break if valid?(square)
 
