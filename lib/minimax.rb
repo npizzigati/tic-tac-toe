@@ -21,11 +21,6 @@ class Minimax
 end
 
 class Node
-  WINNING_LINES = [0, 1, 2], [3, 4, 5], [6, 7, 8], # horizontal
-                   [0, 3, 6], [1, 4, 7], [2, 5, 8], # vertical
-                   [0, 4, 8], [2, 4, 6] # diagonal
-
-  # attr_accessor :squares, :marker, :score, :children
   attr_accessor :score
 
   attr_reader :winner, :children, :board
@@ -33,7 +28,7 @@ class Node
   def initialize(board, marker)
     @board = board
     @marker = marker
-    @winner = determine_winner
+    @winner = @board.determine_winner
     @children = []
     @score = nil
     if terminal_node?
@@ -48,16 +43,15 @@ class Node
   end
 
   def add_children
-    0.upto(8) do |idx|
-      if move_available?(idx)
-        @children << Node.new(child_board(idx),
-                             other_marker)
+    0.upto(8) do |index|
+      if move_available?(index)
+        @children << Node.new(child_board(index), other_marker)
       end
     end
   end
 
-  def move_available?(idx)
-    @board[idx].nil?
+  def move_available?(index)
+    @board[index] == :empty
   end
 
   def assign_score
@@ -72,29 +66,15 @@ class Node
   end
 
   def terminal_node?
-    @winner || tie?
+    @winner || @board.full?
   end
 
-  def child_board(idx)
-    @board[0...idx] +
-      [other_marker] +
-      @board[(idx + 1)..-1]
-  end
+  def child_board(index)
+    child_board = Board.new
+    child_board.squares = @board.squares.dup
+    child_board[index] = other_marker
 
-  def determine_winner
-    WINNING_LINES.each do |line|
-      line_of_markers = replace_indices_with_markers(line)
-      return line_of_markers.first if line_of_markers.uniq.size == 1
-    end
-    nil
-  end
-
-  def replace_indices_with_markers(line)
-    line.map { |index| @board[index] }
-  end
-
-  def tie?
-    @board.find_index(nil).nil? # All moves taken
+    child_board
   end
 
   def other_marker

@@ -1,44 +1,65 @@
 require 'io/wait'
 require 'io/console'
 
+# Configurable constants
+COMPUTER_MARKER = 'X'
+HUMAN_MARKER = 'O'
+
+BOARD_OFFSET = [2, 2] # [y, x] offset from upper left corner
+
+
 class MoveOutOfBoundsError < StandardError; end
 class KeyboardInterruptError < StandardError; end
 
 class Display
-  COMPUTER_MARKER = 'X'
-  HUMAN_MARKER = 'O'
-  CURSOR_MARKER = '‾'
-  HIDE_CURSOR = "\e[?25l"
-  SHOW_CURSOR = "\e[?25h"
-
-  # Board lines
-  HORIZONTAL1 = { start: [5, 10], stop: [5, 22] }
-  HORIZONTAL2 = { start: [9, 10], stop: [9, 22] }
-  VERTICAL1 = { start: [2, 14], stop: [12, 14] }
-  VERTICAL2 = { start: [2, 18], stop: [12, 18] }
-
   # ANSI escape codes
+  # Movement
   UP_ARROW = "\e[A"
   DOWN_ARROW = "\e[B"
   RIGHT_ARROW = "\e[C"
   LEFT_ARROW = "\e[D"
+  # Properties
+  WARNING_COLOR = "\u001b[36m" # cyan
   HIGHLIGHT = "\e[1m"
   ALL_PROPERTIES_OFF = "\e[0m"
+  # Other
   CTRL_C = "\u0003"
 
+  CURSOR_MARKER = '‾'
   CARRIAGE_RETURN = "\r"
   LINE_FEED = "\n"
 
-  def initialize(terminal_setup = true)
+  def initialize(terminal_setup = true) # pass in false flag for testing
     prepare_terminal if terminal_setup
+    set_line_coordinates
     @center = calculate_center
     @square_coordinates = calculate_square_coordinates
     @cursor_coordinates = calculate_cursor_coordinates
-    @cursor_position = 4
     @input = nil
+    @warning_visible = nil
+    @cursor_position = 0
   end
 
-  def prepare_terminal 
+  def set_line_coordinates
+    @horizontal1 = { start: [4, 1], stop: [4, 13] }
+    @horizontal2 = { start: [8, 1], stop: [8, 13] }
+    @vertical1 = { start: [1, 5], stop: [11, 5] }
+    @vertical2 = { start: [1, 9], stop: [11, 9] }
+
+    [@horizontal1, @horizontal2,
+     @vertical1, @vertical2].each do |coord_pair|
+      apply_offset(coord_pair)
+    end
+  end
+
+  def apply_offset(coord_pair)
+    coord_pair.keys.each do |k| 
+      coord_pair[k] = [coord_pair[k][0] + BOARD_OFFSET[0],
+                       coord_pair[k][1] + BOARD_OFFSET[1]]
+    end
+  end
+
+  def prepare_terminal
     STDIN.raw!
     STDIN.echo = false
     hide_cursor
@@ -46,25 +67,103 @@ class Display
   end
 
   def hide_cursor
-    STDOUT.write HIDE_CURSOR
+    STDOUT.write "\e[?25l"
   end
 
   def show_cursor
-    STDOUT.write SHOW_CURSOR
+    STDOUT.write "\e[?25h"
+  end
+
+  def clear_line
+    STDOUT.write "\u001b[2K" # clear line
   end
 
   def clear_screen
     STDOUT.write "\u001b[2J" # clear screen
     STDOUT.write "\u001b[0;0H" # set cursor to home position
   end
-  
-  def mark(number, marker)
-    move_to_point(*@square_coordinates[number])
+
+  def show_turn(turn)
+    case turn
+    when :human
+      print_message 'Your move? (arrow keys to move cursor and Enter to select)'
+    when :computer
+      print_message 'Computer\'s move'
+    end
+  end
+
+  def mark_square(index, marker)
+    move_to_point(*@square_coordinates[index])
     print_marker(marker)
   end
 
   def print_marker(marker)
     print marker == :computer ? COMPUTER_MARKER : HUMAN_MARKER
+  end
+
+  def input_char(prompt, options=nil)
+    print_message prompt
+    loop do
+      entered = STDIN.getch
+      close if entered == "\u0003" # exit program on Ctrl-c
+      if !options || options.include?(entered)
+        clear :message, :warning
+        return entered 
+      end
+
+      print_warning "Please enter #{prettier_print(options)}"
+    end
+  end
+
+  def print_message(text)
+    clear :message
+    print text
+  end
+
+  def print_warning(text)
+    clear :warning
+    sleep 0.08
+    print_warning_color text
+    @warning_visible = true
+  end
+
+  def print_warning_color(text)
+    STDOUT.write WARNING_COLOR
+    print text
+    STDOUT.write ALL_PROPERTIES_OFF
+  end
+           
+  def clear(*lines)
+    lines.each do |line|
+      case line
+      when :message
+        move_to_point 1, 1
+      when :warning
+        move_to_point 2, 1
+        @warning_visible = false
+      end
+      clear_line
+    end
+  end
+
+  def prettier_print(options)
+    options = options.map { |option| option == ' ' ? 'space' : option }
+    case options.size
+    when 1
+      options[0]
+    when 2
+      "#{options[0]} or #{options[1]}"
+    when 3..10
+      options[0..-2].join(', ') + ' or ' + options[-1]
+    end
+  end
+
+  def retrieve_goes_first_selection
+    human_first = input_char('Would you like to go first? (y/n)',
+                             %w(y n))
+    return :human if human_first == 'y'
+
+    :computer
   end
 
   def retrieve_human_move
@@ -78,11 +177,12 @@ class Display
         retrieve_keypress
         process_arrow_keys
         break if selection_made?
+        # add error for invalid selection key
 
       rescue MoveOutOfBoundsError, KeyboardInterruptError => e
         exit(1) if e.class == KeyboardInterruptError
 
-        print '!'
+        print_warning 'Sorry, can\'t move cursor there.'
       end
     end
   end
@@ -93,7 +193,7 @@ class Display
 
   def retrieve_keypress
     @input = STDIN.getch
-    raise KeyboardInterruptError if @input == CTRL_C
+    exit(1) if @input == CTRL_C
     @input << STDIN.getch while STDIN.ready?
   end
 
@@ -107,7 +207,7 @@ class Display
   end
 
   def invalid_move
-    print "Invalid move"
+    print_warning "Sorry, that move is taken."
   end
 
   def move_cursor(new_cursor_position)
@@ -117,27 +217,32 @@ class Display
     insert_cursor_marker
   end
 
+  # can I condense these methods?
   def cursor_up
     raise MoveOutOfBoundsError if @cursor_position < 3
     new_cursor_position = @cursor_position - 3
+    clear :warning if @warning_visible
     move_cursor(new_cursor_position)
   end
 
   def cursor_down
     raise MoveOutOfBoundsError if @cursor_position > 5
     new_cursor_position = @cursor_position + 3
+    clear :warning if @warning_visible
     move_cursor(new_cursor_position)
   end
 
   def cursor_right
     raise MoveOutOfBoundsError if [2, 5, 8].include? @cursor_position
     new_cursor_position = @cursor_position + 1
+    clear :warning if @warning_visible
     move_cursor(new_cursor_position)
   end
 
   def cursor_left
     raise MoveOutOfBoundsError if [0, 3, 6].include? @cursor_position
     new_cursor_position = @cursor_position - 1
+    clear :warning if @warning_visible
     move_cursor(new_cursor_position)
   end
 
@@ -153,14 +258,14 @@ class Display
   end
 
   def calculate_square_coordinates
-    y_offset, x_offset = *calculate_distances_between_points
+    y_dist, x_dist = *calculate_distances_between_points
     ctr_y, ctr_x = *@center
 
-    { 0 => [ctr_y - y_offset, ctr_x - x_offset], 1 => [ctr_y - y_offset, ctr_x],
-      2 => [ctr_y - y_offset, ctr_x + x_offset], 3 => [ctr_y, ctr_x - x_offset],
-      4 => [ctr_y, ctr_x], 5 => [ctr_y, ctr_x + x_offset],
-      6 => [ctr_y + y_offset, ctr_x - x_offset], 7 => [ctr_y + y_offset, ctr_x],
-      8 => [ctr_y + y_offset, ctr_x + x_offset] }
+    { 0 => [ctr_y - y_dist, ctr_x - x_dist], 1 => [ctr_y - y_dist, ctr_x],
+      2 => [ctr_y - y_dist, ctr_x + x_dist], 3 => [ctr_y, ctr_x - x_dist],
+      4 => [ctr_y, ctr_x], 5 => [ctr_y, ctr_x + x_dist],
+      6 => [ctr_y + y_dist, ctr_x - x_dist], 7 => [ctr_y + y_dist, ctr_x],
+      8 => [ctr_y + y_dist, ctr_x + x_dist] }
   end
 
   def calculate_cursor_coordinates
@@ -175,10 +280,10 @@ class Display
   end
 
   def calculate_distances_between_points
-    x_start = HORIZONTAL1[:start][1]
-    x_stop = HORIZONTAL1[:stop][1]
-    y_start = VERTICAL1[:start][0]
-    y_stop = VERTICAL1[:stop][0]
+    x_start = @horizontal1[:start][1]
+    x_stop = @horizontal1[:stop][1]
+    y_start = @vertical1[:start][0]
+    y_stop = @vertical1[:stop][0]
 
     x_dist = ((x_stop - x_start + 1) / 3.0).round
     y_dist = ((y_stop - y_start + 1) / 3.0).round
@@ -187,19 +292,18 @@ class Display
   end
 
   def draw_initial_board
-    line_coord_pairs = [HORIZONTAL1, HORIZONTAL2,
-            VERTICAL1, VERTICAL2]
-
-    line_coord_pairs.each do |line_coord_pair|
-      Line.new(line_coord_pair).draw
+    [@horizontal1, @horizontal2,
+     @vertical1, @vertical2].each do |coord_pair|
+      Line.new(coord_pair).draw
     end
+    move_cursor(4)
   end
 
   def calculate_center
-    center_y = (HORIZONTAL1[:start][0] +
-                 HORIZONTAL2[:start][0]) / 2
-    center_x = (VERTICAL1[:start][1] +
-                 VERTICAL2[:start][1]) / 2
+    center_y = (@horizontal1[:start][0] +
+                 @horizontal2[:start][0]) / 2
+    center_x = (@vertical1[:start][1] +
+                 @vertical2[:start][1]) / 2
     [center_y, center_x]
   end
 
@@ -279,9 +383,5 @@ class Line
 
   def horizontal?
     @start_y == @stop_y
-  end
-
-  def vertical?
-    @start_x == @stop_x
   end
 end

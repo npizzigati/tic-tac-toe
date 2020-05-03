@@ -62,28 +62,28 @@ end
 
 class ComputerTest < Minitest::Test
   def setup
-    @display = Display.new(false)
-    @board = Board.new(@display)
-    @board.instance_variable_set :@squares, [nil, nil, :computer, :computer, :human, :human, nil, :human, :computer]
+    @board = Board.new(Display.new(false))
+    @board.instance_variable_set :@squares, [:empty, :empty, :computer, :computer, :human, :human, :empty, :human, :computer]
     @computer = Computer.new(@board)
   end
 
   def test_computer_selects_best_move
     @computer.move
-    expected = [nil, :computer, :computer, :computer, :human, :human, nil, :human, :computer]
+    expected = [:empty, :computer, :computer, :computer, :human, :human, :empty, :human, :computer]
     actual = @board.instance_variable_get :@squares
     assert_equal expected, actual
   end
 
   def test_computer_makes_move
     @computer.move
-    assert_includes(@board.instance_variable_get @squares, :computer)
+    assert_includes(@board.instance_variable_get(:@squares), :computer)
   end
 end
 
 class MinimaxShortTreeTest < Minitest::Test
   def setup
-    @board = [nil, nil, :computer, :computer, :human, :human, nil, :human, :computer]
+    @board = Board.new(Display.new(false))
+    @board.instance_variable_set :@squares, [:empty, :empty, :computer, :computer, :human, :human, :empty, :human, :computer]
     @tree = Node.new(@board, nil)
   end
 
