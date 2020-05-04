@@ -1,6 +1,5 @@
 require 'pry'
 
-
 require_relative 'minimax.rb'
 require_relative 'display.rb'
 
@@ -149,8 +148,7 @@ class TTTGame
   end
 
   def human_goes_first?
-    a = @display.retrieve_goes_first_selection == :human
-    return a
+    @display.retrieve_goes_first_selection == :human
   end
 end
 
