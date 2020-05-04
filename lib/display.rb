@@ -7,9 +7,7 @@ HUMAN_MARKER = 'O'
 
 BOARD_OFFSET = [2, 2] # [y, x] offset from upper left corner
 
-
 class MoveOutOfBoundsError < StandardError; end
-class KeyboardInterruptError < StandardError; end
 
 class Display
   # ANSI escape codes
@@ -175,14 +173,11 @@ class Display
     loop do
       begin
         retrieve_keypress
-        process_arrow_keys
         break if selection_made?
-        # add error for invalid selection key
 
-      rescue MoveOutOfBoundsError, KeyboardInterruptError => e
-        exit(1) if e.class == KeyboardInterruptError
-
-        print_warning 'Sorry, can\'t move cursor there.'
+        process_arrow_keys
+      rescue MoveOutOfBoundsError
+        print_warning 'Sorry, can\'t move cursor there'
       end
     end
   end
@@ -203,11 +198,13 @@ class Display
     when DOWN_ARROW then cursor_down
     when RIGHT_ARROW then cursor_right
     when LEFT_ARROW then cursor_left
+    else
+      print_warning 'Only arrow keys and Enter accepted as input'
     end
   end
 
   def invalid_move
-    print_warning "Sorry, that move is taken."
+    print_warning "Sorry, that move is taken"
   end
 
   def move_cursor(new_cursor_position)
