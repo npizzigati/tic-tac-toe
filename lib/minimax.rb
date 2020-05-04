@@ -23,15 +23,14 @@ end
 class Node
   attr_accessor :score
 
-  attr_reader :winner, :children, :board
+  attr_reader :children, :board
 
   def initialize(board, marker)
     @board = board
     @marker = marker
-    @winner = @board.determine_winner
     @children = []
     @score = nil
-    if terminal_node?
+    if @board.terminal_state?
       @score = assign_score
     else
       add_children
@@ -55,7 +54,7 @@ class Node
   end
 
   def assign_score
-    case @winner
+    case @board.winner
     when :computer
       1
     when :human
@@ -63,10 +62,6 @@ class Node
     else
       0
     end
-  end
-
-  def terminal_node?
-    @winner || @board.full?
   end
 
   def child_board(index)

@@ -10,16 +10,17 @@ class Board
 
   include Enumerable
 
-  # Allow Minimax methods to read/write @squares array directly
   attr_accessor :squares
+  attr_reader :latest_move, :winner
 
-  def initialize(display = nil) # nil flag used for minimax boards
-    @display = display
+  def initialize
     # board array indices
     # 0 | 1 | 2
     # 3 | 4 | 5
     # 6 | 7 | 8
     @squares = Array.new(9) { :empty }
+    @latest_move = nil
+    @winner = determine_winner
   end
 
   def each(&block) 
@@ -28,7 +29,7 @@ class Board
 
   def []=(index, marker)
     @squares[index] = marker
-    @display.mark_square(index, marker) if @display
+    @latest_move = index
   end
 
   def [](index)
@@ -37,6 +38,16 @@ class Board
 
   def full?
     @squares.index(:empty).nil?
+  end
+
+  def terminal_state?
+    @winner || full?
+  end
+
+  def delta(other_board)
+    @squares.each_with_index do |square, index|
+      return index if other_board[index] != square
+    end
   end
 
   # Try to make this method clearer
@@ -73,14 +84,9 @@ class Computer
       a.score <=> b.score 
     end
 
-    delta(best_child_board)
+    @board.delta(best_child_board)
   end
 
-  def delta(best_child_board)
-    @board.each_with_index do |square, index|
-      return index if best_child_board[index] != square
-    end
-  end
 
   def pause_briefly
     sleep 0.5
@@ -113,7 +119,7 @@ end
 class TTTGame
   def initialize
     @display = Display.new
-    @board = Board.new(@display)
+    @board = Board.new
     @human = Human.new(@board, @display)
     @computer = Computer.new(@board)
     @turn = nil
@@ -133,9 +139,8 @@ class TTTGame
       next_turn
       @display.show_turn(@turn)
       @turn == :human ? @human.move : @computer.move
-      break if @board.full?
-      #display everything from here: Try to remove display from human
-      #and board classes
+      @display.mark_square(@board.latest_move, @turn)
+      break if @board.terminal_state?
     end
   end
 
@@ -148,7 +153,7 @@ class TTTGame
   end
 
   def human_goes_first?
-     @display.retrieve_goes_first_selection == :human
+    @display.retrieve_goes_first_selection == :human
   end
 end
 
