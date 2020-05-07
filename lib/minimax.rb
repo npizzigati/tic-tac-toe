@@ -22,7 +22,6 @@ end
 
 class Node
   attr_accessor :score
-
   attr_reader :children, :board
 
   def initialize(board, marker, depth = 9)

@@ -1,5 +1,3 @@
-require 'pry'
-
 require_relative 'minimax.rb'
 require_relative 'display.rb'
 
@@ -148,15 +146,12 @@ class Human < Player
 end
 
 def valid?(move)
-  move != nil && @board[move] == :empty
+  move && @board[move] == :empty
 end
 
 class History
   def initialize
     @previous_boards = []
-    @human_wins = 0
-    @computer_wins = 0
-    @ties = 0
   end
 
   def <<(board)

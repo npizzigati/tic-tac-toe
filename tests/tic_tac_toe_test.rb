@@ -6,19 +6,18 @@ require_relative '../lib/tic_tac_toe.rb'
 
 class LineTest < Minitest::Test
   def setup
-    Line.class_variable_set :@@coords_drawn, []
     @display = Display.new(false)
   end
 
   def test_draw_horizontal_line
     coord_pair = @display.instance_variable_get :@horizontal1
-    horizontal_line = Line.new(coord_pair)
+    horizontal_line = Line.new(coord_pair, [])
     assert_output(/─/) { horizontal_line.draw}
   end
 
   def test_draw_vertical_line
     coord_pair = @display.instance_variable_get :@vertical1
-    vertical_line = Line.new(coord_pair)
+    vertical_line = Line.new(coord_pair, [])
     assert_output(/│/) { vertical_line.draw }
   end
 end

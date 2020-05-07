@@ -1,6 +1,7 @@
 require 'io/wait'
 require 'io/console'
 
+# Markers
 COMPUTER_MARKER = 'X'
 HUMAN_MARKER = 'O'
 CURSOR_MARKER = '‾'
@@ -74,11 +75,11 @@ class Display
   end
 
   def clear_line
-    STDOUT.write "\u001b[2K" # clear line
+    STDOUT.write "\u001b[2K"
   end
 
   def clear_cursor_to_end_of_line
-    STDOUT.write "\u001b[K" # clear line
+    STDOUT.write "\u001b[K"
   end
 
   def clear_screen
@@ -130,7 +131,7 @@ class Display
     draw_board
     print_message 'TIC-TAC-TOE', :heading
     print_message 'Welcome to unbeatable tic-tac-toe. ' \
-                  'This is a 5-game match against the computer.'
+                  'This is a 5-game match.'
     input_char 'The best you can do is tie (sorry). ' \
                'Press any key to continue.', nil, :message_line2
     show_stats(0, 0, 0)
@@ -138,11 +139,12 @@ class Display
 
   def goodbye
     print_message 'Thanks for playing!'
-    input_char 'Press any key to exit.', nil, :message_line2
+    input_char 'Press x to exit.', ['x'], :message_line2
   end
 
   def show_game_number(game_number)
-    go_to_and_clear_game_number_and_stats
+    go_to_and_clear_stats
+    go_to_and_clear_game_number
     print "Game #{game_number}"
   end
 
@@ -199,9 +201,10 @@ class Display
     clear_cursor_to_end_of_line
   end
 
-  def go_to_and_clear_game_number_and_stats
+  def go_to_and_clear_game_number
     move_to_point(*GAME_NUMBER_POSITION)
-    clear_cursor_to_end_of_line
+    print '      '
+    move_to_point(*GAME_NUMBER_POSITION)
   end
 
   def prettier_print(options)
@@ -277,37 +280,33 @@ class Display
 
   def move_cursor(new_cursor_position)
     hide_selection_cursor
+    go_to_and_clear :warning if @warning_visible
     @cursor_position = new_cursor_position
     move_to_point(*@cursor_coordinates[@cursor_position])
     show_selection_cursor
   end
 
-  # can I condense these methods?
   def cursor_up
     raise MoveOutOfBoundsError if @cursor_position < 3
     new_cursor_position = @cursor_position - 3
-    go_to_and_clear :warning if @warning_visible
     move_cursor(new_cursor_position)
   end
 
   def cursor_down
     raise MoveOutOfBoundsError if @cursor_position > 5
     new_cursor_position = @cursor_position + 3
-    go_to_and_clear :warning if @warning_visible
     move_cursor(new_cursor_position)
   end
 
   def cursor_right
     raise MoveOutOfBoundsError if [2, 5, 8].include? @cursor_position
     new_cursor_position = @cursor_position + 1
-    go_to_and_clear :warning if @warning_visible
     move_cursor(new_cursor_position)
   end
 
   def cursor_left
     raise MoveOutOfBoundsError if [0, 3, 6].include? @cursor_position
     new_cursor_position = @cursor_position - 1
-    go_to_and_clear :warning if @warning_visible
     move_cursor(new_cursor_position)
   end
 
