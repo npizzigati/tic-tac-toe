@@ -31,7 +31,6 @@ class Display
   # Other
   CTRL_C = "\u0003"
 
-
   # Other escape codes
   CARRIAGE_RETURN = "\r"
   LINE_FEED = "\n"
@@ -43,7 +42,8 @@ class Display
   VERTICAL2 = { start: [1, 9], stop: [11, 9] }
   BOARD_OFFSET = [6, 2] # [y, x] offset from upper left corner
 
-  def initialize(terminal_setup = true) # pass in false flag for testing
+  # pass in false flag for testing
+  def initialize(terminal_setup = true)
     prepare_terminal if terminal_setup
     establish_line_coordinates
     @center = calculate_center
@@ -91,7 +91,8 @@ class Display
     case turn
     when :human
       print_message 'Your move?'
-      print_message '(Arrow keys to move cursor and Enter to select)', :message_line2
+      print_message '(Arrow keys to move cursor and Enter to select)',
+                    :message_line2
     when :computer
       print_message 'Computer\'s move'
       go_to_and_clear :message_line2
@@ -150,11 +151,11 @@ class Display
 
   def show_stats(ties, human_wins, computer_wins)
     go_to_and_clear_stats
-    print " —— Match stats: Human:" 
+    print " —— Match stats: Human:"
     print_score_color human_wins
-    print " Computer:" 
+    print " Computer:"
     print_score_color computer_wins
-    print " Ties:" 
+    print " Ties:"
     print_score_color ties
   end
 

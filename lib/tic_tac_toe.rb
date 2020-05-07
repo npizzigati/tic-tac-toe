@@ -3,8 +3,9 @@ require_relative 'display.rb'
 
 class Board
   WINNING_LINES = [0, 1, 2], [3, 4, 5], [6, 7, 8], # horizontal
-                   [0, 3, 6], [1, 4, 7], [2, 5, 8], # vertical
-                   [0, 4, 8], [2, 4, 6] # diagonal
+                  [0, 3, 6], [1, 4, 7], [2, 5, 8], # vertical
+                  [0, 4, 8], [2, 4, 6] # diagonal
+  COMPUTER_MOVE_PAUSE = 0.6
 
   include Enumerable
 
@@ -73,7 +74,6 @@ class Board
   def terminal_state?
     winner || full?
   end
-
 end
 
 class Player
@@ -92,15 +92,15 @@ class Computer < Player
   end
 
   def move
-    if first_move?
-      move = (0..8).to_a.sample
-    else
-      move = retrieve_minimax_move
-    end
+    move = if first_move?
+             (0..8).to_a.sample
+           else
+             retrieve_minimax_move
+           end
     # If the second move on the board is the computer's, this
     # is its first Minimax move, and the algorithm is bit slower,
     # so no need to pause
-    pause_briefly unless second_move?
+    sleep COMPUTER_MOVE_PAUSE unless second_move?
     @board[move] = :computer
   end
 
@@ -119,10 +119,6 @@ class Computer < Player
     end
 
     @board.delta(best_child_board)
-  end
-
-  def pause_briefly
-    sleep 0.6
   end
 end
 
@@ -232,7 +228,7 @@ class TTTGame
   end
 end
 
-if __FILE__ == $PROGRAM_NAME
+if $PROGRAM_NAME == __FILE__
   begin
     game = TTTGame.new
     game.play_match
