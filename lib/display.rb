@@ -1,11 +1,18 @@
 require 'io/wait'
 require 'io/console'
 
-# Configurable constants
+# Markers
 COMPUTER_MARKER = 'X'
 HUMAN_MARKER = 'O'
+CURSOR_MARKER = '‾'
 
-BOARD_OFFSET = [2, 2] # [y, x] offset from upper left corner
+# Positions
+HEADING_POSITION = [1, 1]
+GAME_NUMBER_POSITION = [1, 14]
+STATS_POSITION = [1, 20]
+MESSAGE_POSITION1 = [3, 1]
+MESSAGE_POSITION2 = [4, 1]
+WARNING_POSITION = [5, 1]
 
 class MoveOutOfBoundsError < StandardError; end
 
@@ -18,18 +25,27 @@ class Display
   LEFT_ARROW = "\e[D"
   # Properties
   WARNING_COLOR = "\u001b[36m" # cyan
+  SCORE_COLOR = "\u001b[36m" # cyan
   HIGHLIGHT = "\e[1m"
   ALL_PROPERTIES_OFF = "\e[0m"
   # Other
   CTRL_C = "\u0003"
 
-  CURSOR_MARKER = '‾'
+  # Other escape codes
   CARRIAGE_RETURN = "\r"
   LINE_FEED = "\n"
 
-  def initialize(terminal_setup = true) # pass in false flag for testing
+  # Initial line coordinates before board offset
+  HORIZONTAL1 = { start: [4, 1], stop: [4, 13] }
+  HORIZONTAL2 = { start: [8, 1], stop: [8, 13] }
+  VERTICAL1 = { start: [1, 5], stop: [11, 5] }
+  VERTICAL2 = { start: [1, 9], stop: [11, 9] }
+  BOARD_OFFSET = [6, 2] # [y, x] offset from upper left corner
+
+  # pass in false flag for testing
+  def initialize(terminal_setup = true)
     prepare_terminal if terminal_setup
-    set_line_coordinates
+    establish_line_coordinates
     @center = calculate_center
     @square_coordinates = calculate_square_coordinates
     @cursor_coordinates = calculate_cursor_coordinates
@@ -38,42 +54,32 @@ class Display
     @cursor_position = 0
   end
 
-  def set_line_coordinates
-    @horizontal1 = { start: [4, 1], stop: [4, 13] }
-    @horizontal2 = { start: [8, 1], stop: [8, 13] }
-    @vertical1 = { start: [1, 5], stop: [11, 5] }
-    @vertical2 = { start: [1, 9], stop: [11, 9] }
-
-    [@horizontal1, @horizontal2,
-     @vertical1, @vertical2].each do |coord_pair|
-      apply_offset(coord_pair)
-    end
-  end
-
-  def apply_offset(coord_pair)
-    coord_pair.keys.each do |k| 
-      coord_pair[k] = [coord_pair[k][0] + BOARD_OFFSET[0],
-                       coord_pair[k][1] + BOARD_OFFSET[1]]
-    end
-  end
-
   def prepare_terminal
     STDIN.raw!
     STDIN.echo = false
-    hide_cursor
+    hide_terminal_cursor
     clear_screen
   end
 
-  def hide_cursor
+  def hide_terminal_cursor
     STDOUT.write "\e[?25l"
   end
 
-  def show_cursor
+  def show_terminal_cursor
     STDOUT.write "\e[?25h"
   end
 
+  def new_game
+    clear_all_squares
+    hide_selection_cursor
+  end
+
   def clear_line
-    STDOUT.write "\u001b[2K" # clear line
+    STDOUT.write "\u001b[2K"
+  end
+
+  def clear_cursor_to_end_of_line
+    STDOUT.write "\u001b[K"
   end
 
   def clear_screen
@@ -84,10 +90,18 @@ class Display
   def show_turn(turn)
     case turn
     when :human
-      print_message 'Your move? (arrow keys to move cursor and Enter to select)'
+      print_message 'Your move?'
+      print_message '(Arrow keys to move cursor and Enter to select)',
+                    :message_line2
     when :computer
       print_message 'Computer\'s move'
+      go_to_and_clear :message_line2
     end
+  end
+
+  def continue_match?
+    input = input_char('Continue match? (y/n)', %w(y n), :message_line2)
+    input == 'y'
   end
 
   def mark_square(index, marker)
@@ -99,27 +113,59 @@ class Display
     print marker == :computer ? COMPUTER_MARKER : HUMAN_MARKER
   end
 
-  def input_char(prompt, options=nil)
-    print_message prompt
+  def input_char(prompt, options, message_line = :message_line1)
+    print_message prompt, message_line
+
     loop do
-      entered = STDIN.getch
-      close if entered == "\u0003" # exit program on Ctrl-c
+      entered = STDIN.getch.downcase
+      exit(1) if entered == CTRL_C
       if !options || options.include?(entered)
-        clear :message, :warning
-        return entered 
+        go_to_and_clear message_line, :warning
+        return entered
       end
 
       print_warning "Please enter #{prettier_print(options)}"
     end
   end
 
-  def print_message(text)
-    clear :message
+  def show_welcome
+    draw_board
+    print_message 'TIC-TAC-TOE', :heading
+    print_message 'Welcome to unbeatable tic-tac-toe. ' \
+                  'This is a 5-game match.'
+    input_char 'The best you can do is tie (sorry). ' \
+               'Press any key to continue.', nil, :message_line2
+    show_stats(0, 0, 0)
+  end
+
+  def goodbye
+    print_message 'Thanks for playing!'
+    input_char 'Press x to exit.', ['x'], :message_line2
+  end
+
+  def show_game_number(game_number)
+    go_to_and_clear_stats
+    go_to_and_clear_game_number
+    print "Game #{game_number}"
+  end
+
+  def show_stats(ties, human_wins, computer_wins)
+    go_to_and_clear_stats
+    print " —— Match stats: Human:"
+    print_score_color human_wins
+    print " Computer:"
+    print_score_color computer_wins
+    print " Ties:"
+    print_score_color ties
+  end
+
+  def print_message(text, line = :message_line1)
+    go_to_and_clear line
     print text
   end
 
   def print_warning(text)
-    clear :warning
+    go_to_and_clear :warning
     sleep 0.08
     print_warning_color text
     @warning_visible = true
@@ -130,18 +176,36 @@ class Display
     print text
     STDOUT.write ALL_PROPERTIES_OFF
   end
-           
-  def clear(*lines)
+
+  def print_score_color(text)
+    STDOUT.write SCORE_COLOR
+    print text
+    STDOUT.write ALL_PROPERTIES_OFF
+  end
+
+  def go_to_and_clear(*lines)
     lines.each do |line|
       case line
-      when :message
-        move_to_point 1, 1
+      when :heading then move_to_point(*HEADING_POSITION)
+      when :message_line1 then move_to_point(*MESSAGE_POSITION1)
+      when :message_line2 then move_to_point(*MESSAGE_POSITION2)
       when :warning
-        move_to_point 2, 1
+        move_to_point(*WARNING_POSITION)
         @warning_visible = false
       end
       clear_line
     end
+  end
+
+  def go_to_and_clear_stats
+    move_to_point(*STATS_POSITION)
+    clear_cursor_to_end_of_line
+  end
+
+  def go_to_and_clear_game_number
+    move_to_point(*GAME_NUMBER_POSITION)
+    print '      '
+    move_to_point(*GAME_NUMBER_POSITION)
   end
 
   def prettier_print(options)
@@ -156,9 +220,16 @@ class Display
     end
   end
 
-  def retrieve_goes_first_selection
+  def show_outcome(winner)
+    message = winner ? "#{winner.to_s.capitalize} wins!" : 'Tie!'
+
+    print_message message
+  end
+
+  def retrieve_first_player_selection
     human_first = input_char('Would you like to go first? (y/n)',
                              %w(y n))
+    move_cursor(4)
     return :human if human_first == 'y'
 
     :computer
@@ -166,6 +237,7 @@ class Display
 
   def retrieve_human_move
     retrieve_move_selection
+    go_to_and_clear :warning if @warning_visible
     @cursor_position
   end
 
@@ -208,47 +280,50 @@ class Display
   end
 
   def move_cursor(new_cursor_position)
-    erase_cursor_marker
+    hide_selection_cursor
+    go_to_and_clear :warning if @warning_visible
     @cursor_position = new_cursor_position
     move_to_point(*@cursor_coordinates[@cursor_position])
-    insert_cursor_marker
+    show_selection_cursor
   end
 
-  # can I condense these methods?
   def cursor_up
     raise MoveOutOfBoundsError if @cursor_position < 3
     new_cursor_position = @cursor_position - 3
-    clear :warning if @warning_visible
     move_cursor(new_cursor_position)
   end
 
   def cursor_down
     raise MoveOutOfBoundsError if @cursor_position > 5
     new_cursor_position = @cursor_position + 3
-    clear :warning if @warning_visible
     move_cursor(new_cursor_position)
   end
 
   def cursor_right
     raise MoveOutOfBoundsError if [2, 5, 8].include? @cursor_position
     new_cursor_position = @cursor_position + 1
-    clear :warning if @warning_visible
     move_cursor(new_cursor_position)
   end
 
   def cursor_left
     raise MoveOutOfBoundsError if [0, 3, 6].include? @cursor_position
     new_cursor_position = @cursor_position - 1
-    clear :warning if @warning_visible
     move_cursor(new_cursor_position)
   end
 
-  def erase_cursor_marker
+  def hide_selection_cursor
     move_to_point(*@cursor_coordinates[@cursor_position])
     print ' '
   end
 
-  def insert_cursor_marker
+  def clear_all_squares
+    0.upto 8 do |index|
+      move_to_point(*@square_coordinates[index])
+      print ' '
+    end
+  end
+
+  def show_selection_cursor
     STDOUT.write HIGHLIGHT
     print CURSOR_MARKER
     STDOUT.write ALL_PROPERTIES_OFF
@@ -288,12 +363,31 @@ class Display
     [y_dist, x_dist]
   end
 
-  def draw_initial_board
+  def establish_line_coordinates
+    @horizontal1 = HORIZONTAL1
+    @horizontal2 = HORIZONTAL2
+    @vertical1 = VERTICAL1
+    @vertical2 = VERTICAL2
+
     [@horizontal1, @horizontal2,
      @vertical1, @vertical2].each do |coord_pair|
-      Line.new(coord_pair).draw
+      apply_offset(coord_pair)
     end
-    move_cursor(4)
+  end
+
+  def apply_offset(coord_pair)
+    coord_pair.keys.each do |k|
+      coord_pair[k] = [coord_pair[k][0] + BOARD_OFFSET[0],
+                       coord_pair[k][1] + BOARD_OFFSET[1]]
+    end
+  end
+
+  def draw_board
+    @coords_drawn = []
+    [@horizontal1, @horizontal2,
+     @vertical1, @vertical2].each do |coord_pair|
+      Line.new(coord_pair, @coords_drawn).draw
+    end
   end
 
   def calculate_center
@@ -315,19 +409,18 @@ class Display
   def close
     STDIN.cooked!
     STDIN.echo = true
-    show_cursor
+    show_terminal_cursor
     clear_screen
   end
 end
 
 class Line
-  @@coords_drawn = []
-
-  def initialize(line_coord_pair)
-    @start_y = line_coord_pair[:start].first
-    @start_x = line_coord_pair[:start].last
-    @stop_y = line_coord_pair[:stop].first
-    @stop_x = line_coord_pair[:stop].last
+  def initialize(coord_pair, coords_drawn)
+    @start_y = coord_pair[:start].first
+    @start_x = coord_pair[:start].last
+    @stop_y = coord_pair[:stop].first
+    @stop_x = coord_pair[:stop].last
+    @coords_drawn = coords_drawn
   end
 
   def draw
@@ -346,25 +439,23 @@ class Line
   def draw_horizontal_line
     @start_x.upto(@stop_x) do |x|
       point_coords = [@start_y, x]
-      if point_at_intersection? point_coords
-        print '┼'
-      else
-        print '─'
-        @@coords_drawn << [@start_y, x]
-      end
+      print intersection?(point_coords) ? '┼' : '─'
+
+      @coords_drawn << [@start_y, x]
+
+      sleep 0.01
     end
   end
 
   def draw_vertical_line
     @start_y.upto(@stop_y) do |y|
       point_coords = [y, @start_x]
-      if point_at_intersection? point_coords
-        print '┼'
-      else
-        print '│'
-        @@coords_drawn << [y, @start_x]
-      end
+      print intersection?(point_coords) ? '┼' : '│'
+
+      @coords_drawn << [y, @start_x]
       position_cursor_below
+
+      sleep 0.01
     end
   end
 
@@ -374,8 +465,8 @@ class Line
     STDOUT.write down + left
   end
 
-  def point_at_intersection?(point_coords)
-    @@coords_drawn.include? point_coords
+  def intersection?(point_coords)
+    @coords_drawn.include? point_coords
   end
 
   def horizontal?

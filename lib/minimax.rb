@@ -1,16 +1,16 @@
 class Minimax
   def create_tree(board)
     node = Node.new(board, nil)
-    score_node(node)
+    score_tree(node)
     node
   end
 
-  def score_node(node, depth = 0)
+  def score_tree(node, depth = 0)
     return node.score if node.score
 
     children_scores = []
     node.children.each do |child|
-      children_scores << score_node(child, depth + 1)
+      children_scores << score_tree(child, depth + 1)
     end
     node.score = if depth.even?
                    children_scores.max
@@ -22,16 +22,15 @@ end
 
 class Node
   attr_accessor :score
+  attr_reader :children, :board
 
-  attr_reader :winner, :children, :board
-
-  def initialize(board, marker)
+  def initialize(board, marker, depth = 9)
     @board = board
     @marker = marker
-    @winner = @board.determine_winner
     @children = []
     @score = nil
-    if terminal_node?
+    @depth = depth
+    if @board.terminal_state?
       @score = assign_score
     else
       add_children
@@ -45,7 +44,8 @@ class Node
   def add_children
     0.upto(8) do |index|
       if move_available?(index)
-        @children << Node.new(child_board(index), other_marker)
+        @children << Node.new(child_board(index), other_marker,
+                              @depth - 1)
       end
     end
   end
@@ -55,18 +55,14 @@ class Node
   end
 
   def assign_score
-    case @winner
+    case @board.winner
     when :computer
-      1
+      1 * @depth
     when :human
-      -1
+      -1 * @depth
     else
       0
     end
-  end
-
-  def terminal_node?
-    @winner || @board.full?
   end
 
   def child_board(index)
