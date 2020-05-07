@@ -5,7 +5,6 @@ class Board
   WINNING_LINES = [0, 1, 2], [3, 4, 5], [6, 7, 8], # horizontal
                   [0, 3, 6], [1, 4, 7], [2, 5, 8], # vertical
                   [0, 4, 8], [2, 4, 6] # diagonal
-  COMPUTER_MOVE_PAUSE = 0.6
 
   include Enumerable
 
@@ -87,6 +86,8 @@ class Player
 end
 
 class Computer < Player
+  COMPUTER_MOVE_PAUSE = 0.6
+
   def initialize(board)
     super
   end
