@@ -187,7 +187,7 @@ class TTTGame
 
       setup_new_game
     end
-    @display.goodbye
+    @display.goodbye(@game_number)
   end
 
   def update_stats
