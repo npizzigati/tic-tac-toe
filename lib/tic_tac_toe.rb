@@ -109,6 +109,10 @@ class Computer < Player
     @board.empty?
   end
 
+  def retrieve_name
+    @display.retrieve_name
+  end
+
   def second_move?
     @board.count(:empty) == 8
   end

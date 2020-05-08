@@ -127,6 +127,7 @@ class Display
     end
   end
 
+
   def show_welcome
     draw_board
     print_message 'TIC-TAC-TOE', :heading
