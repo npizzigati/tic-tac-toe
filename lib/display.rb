@@ -49,9 +49,11 @@ class Display
     @center = calculate_center
     @square_coordinates = calculate_square_coordinates
     @cursor_coordinates = calculate_cursor_coordinates
-    @input = nil
     @warning_visible = nil
     @cursor_position = 0
+    @points = { heading: HEADING_POSITION, message_line1: MESSAGE_POSITION1,
+                message_line2: MESSAGE_POSITION2, warning: WARNING_POSITION,
+                game_number: GAME_NUMBER_POSITION, stats: STATS_POSITION }
   end
 
   def prepare_terminal
@@ -72,13 +74,10 @@ class Display
   def new_game
     clear_all_squares
     hide_selection_cursor
+    clear :stats
   end
 
-  def clear_line
-    STDOUT.write "\u001b[2K"
-  end
-
-  def clear_cursor_to_end_of_line
+  def clear_to_end_of_line
     STDOUT.write "\u001b[K"
   end
 
@@ -95,7 +94,7 @@ class Display
                     :message_line2
     when :computer
       print_message 'Computer\'s move'
-      go_to_and_clear :message_line2
+      clear :message_line2
     end
   end
 
@@ -120,7 +119,7 @@ class Display
       entered = STDIN.getch.downcase
       exit(1) if entered == CTRL_C
       if !options || options.include?(entered)
-        go_to_and_clear message_line, :warning
+        clear message_line, :warning
         return entered
       end
 
@@ -135,22 +134,21 @@ class Display
                   'This is a 5-game match.'
     input_char 'The best you can do is tie (sorry). ' \
                'Press any key to continue.', nil, :message_line2
-    show_stats(0, 0, 0)
   end
 
-  def goodbye
-    print_message 'Thanks for playing!'
+  def goodbye(game_number)
+    pre_message = game_number == 5 ? 'Good match! ' : ''
+    print_message pre_message + 'Thanks for playing.'
     input_char 'Press x to exit.', ['x'], :message_line2
   end
 
   def show_game_number(game_number)
-    go_to_and_clear_stats
-    go_to_and_clear_game_number
+    go_to :game_number
     print "Game #{game_number}"
   end
 
   def show_stats(ties, human_wins, computer_wins)
-    go_to_and_clear_stats
+    go_to :stats
     print " —— Match stats: Human:"
     print_score_color human_wins
     print " Computer:"
@@ -160,12 +158,14 @@ class Display
   end
 
   def print_message(text, line = :message_line1)
-    go_to_and_clear line
+    go_to line
+    clear line
     print text
   end
 
   def print_warning(text)
-    go_to_and_clear :warning
+    go_to :warning
+    clear :warning
     sleep 0.08
     print_warning_color text
     @warning_visible = true
@@ -183,29 +183,26 @@ class Display
     STDOUT.write ALL_PROPERTIES_OFF
   end
 
-  def go_to_and_clear(*lines)
-    lines.each do |line|
-      case line
-      when :heading then move_to_point(*HEADING_POSITION)
-      when :message_line1 then move_to_point(*MESSAGE_POSITION1)
-      when :message_line2 then move_to_point(*MESSAGE_POSITION2)
-      when :warning
-        move_to_point(*WARNING_POSITION)
-        @warning_visible = false
-      end
-      clear_line
+  def save_terminal_cursor_position
+    STDOUT.write "\u001b[s"
+  end
+
+  def restore_terminal_cursor_position
+    STDOUT.write "\u001b[u"
+  end
+
+  def clear(*fields)
+    fields.each do |field|
+      save_terminal_cursor_position
+      go_to(field)
+      clear_to_end_of_line
+      @warning_visible = false if field == :warning
+      restore_terminal_cursor_position
     end
   end
 
-  def go_to_and_clear_stats
-    move_to_point(*STATS_POSITION)
-    clear_cursor_to_end_of_line
-  end
-
-  def go_to_and_clear_game_number
-    move_to_point(*GAME_NUMBER_POSITION)
-    print '      '
-    move_to_point(*GAME_NUMBER_POSITION)
+  def go_to(field)
+    move_to_point(*@points[field])
   end
 
   def prettier_print(options)
@@ -237,7 +234,7 @@ class Display
 
   def retrieve_human_move
     retrieve_move_selection
-    go_to_and_clear :warning if @warning_visible
+    clear :warning if @warning_visible
     @cursor_position
   end
 
@@ -255,17 +252,17 @@ class Display
   end
 
   def selection_made?
-    [LINE_FEED, CARRIAGE_RETURN].include? @input
+    [LINE_FEED, CARRIAGE_RETURN].include? @selection_input
   end
 
   def retrieve_keypress
-    @input = STDIN.getch
-    exit(1) if @input == CTRL_C
-    @input << STDIN.getch while STDIN.ready?
+    @selection_input = STDIN.getch
+    exit(1) if @selection_input == CTRL_C
+    @selection_input << STDIN.getch while STDIN.ready?
   end
 
   def process_arrow_keys
-    case @input
+    case @selection_input
     when UP_ARROW then cursor_up
     when DOWN_ARROW then cursor_down
     when RIGHT_ARROW then cursor_right
@@ -281,7 +278,7 @@ class Display
 
   def move_cursor(new_cursor_position)
     hide_selection_cursor
-    go_to_and_clear :warning if @warning_visible
+    clear :warning if @warning_visible
     @cursor_position = new_cursor_position
     move_to_point(*@cursor_coordinates[@cursor_position])
     show_selection_cursor
@@ -289,24 +286,28 @@ class Display
 
   def cursor_up
     raise MoveOutOfBoundsError if @cursor_position < 3
+
     new_cursor_position = @cursor_position - 3
     move_cursor(new_cursor_position)
   end
 
   def cursor_down
     raise MoveOutOfBoundsError if @cursor_position > 5
+
     new_cursor_position = @cursor_position + 3
     move_cursor(new_cursor_position)
   end
 
   def cursor_right
     raise MoveOutOfBoundsError if [2, 5, 8].include? @cursor_position
+
     new_cursor_position = @cursor_position + 1
     move_cursor(new_cursor_position)
   end
 
   def cursor_left
     raise MoveOutOfBoundsError if [0, 3, 6].include? @cursor_position
+
     new_cursor_position = @cursor_position - 1
     move_cursor(new_cursor_position)
   end
@@ -387,6 +388,7 @@ class Display
     [@horizontal1, @horizontal2,
      @vertical1, @vertical2].each do |coord_pair|
       Line.new(coord_pair, @coords_drawn).draw
+      sleep 0.1
     end
   end
 
@@ -402,8 +404,8 @@ class Display
     move_to_point(*@center)
   end
 
-  def move_to_point(y, x)
-    STDOUT.write "\u001b[#{y};#{x}H"
+  def move_to_point(y_coord, x_coord)
+    STDOUT.write "\u001b[#{y_coord};#{x_coord}H"
   end
 
   def close
@@ -432,8 +434,8 @@ class Line
     move_to_point(@start_y, @start_x)
   end
 
-  def move_to_point(y, x)
-    STDOUT.write "\u001b[#{y};#{x}H"
+  def move_to_point(y_coord, x_coord)
+    STDOUT.write "\u001b[#{y_coord};#{x_coord}H"
   end
 
   def draw_horizontal_line
@@ -442,8 +444,6 @@ class Line
       print intersection?(point_coords) ? '┼' : '─'
 
       @coords_drawn << [@start_y, x]
-
-      sleep 0.01
     end
   end
 
@@ -454,8 +454,6 @@ class Line
 
       @coords_drawn << [y, @start_x]
       position_cursor_below
-
-      sleep 0.01
     end
   end
 
